@@ -1,0 +1,47 @@
+# depslib dependency file v1.0
+1395197285 source:x:\c++\pong\b2debugdraw.cpp
+	"B2DebugDraw.hpp"
+
+1395139928 x:\c++\pong\b2debugdraw.hpp
+	<iostream>
+	<Box2D.h>
+	<SFML\Graphics.hpp>
+
+1395140676 source:x:\c++\pong\main.cpp
+	<iostream>
+	"Pong.hpp"
+
+1395495679 x:\c++\pong\pong.hpp
+	<SFML/Graphics.hpp>
+	"B2DebugDraw.hpp"
+
+1395495711 source:x:\c++\pong\pong.cpp
+	"Pong.hpp"
+
+1395197285 source:x:\c++\[game] pong (box2d, sfml)\pong\b2debugdraw.cpp
+	"B2DebugDraw.hpp"
+
+1396458777 x:\c++\[game] pong (box2d, sfml)\pong\b2debugdraw.hpp
+	<iostream>
+	<Box2D.h>
+	<SFML\Graphics.hpp>
+
+1395140676 source:x:\c++\[game] pong (box2d, sfml)\pong\main.cpp
+	<iostream>
+	"Pong.hpp"
+
+1396622889 x:\c++\[game] pong (box2d, sfml)\pong\pong.hpp
+	<SFML/Graphics.hpp>
+	"b2DrawDebug.hpp"
+
+1396637405 source:x:\c++\[game] pong (box2d, sfml)\pong\pong.cpp
+	"Pong.hpp"
+
+1396459417 x:\c++\[game] pong (box2d, sfml)\pong\b2drawdebug.hpp
+	<iostream>
+	<Box2D.h>
+	<SFML\Graphics.hpp>
+
+1396459417 source:x:\c++\[game] pong (box2d, sfml)\pong\b2drawdebug.cpp
+	"b2DrawDebug.hpp"
+

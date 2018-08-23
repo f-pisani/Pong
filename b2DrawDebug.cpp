@@ -1,0 +1,113 @@
+#include "b2DrawDebug.hpp"
+
+b2DrawDebug::b2DrawDebug(sf::RenderWindow* target) :
+    m_target(target)
+{
+	SetFlags(e_shapeBit | e_jointBit | e_centerOfMassBit /*| e_aabbBit*/);
+}
+
+b2DrawDebug::b2DrawDebug(b2DrawDebug& c) :
+    m_target(c.m_target)
+{
+    SetFlags(e_shapeBit | e_jointBit | e_centerOfMassBit /*| e_aabbBit*/);
+}
+
+void b2DrawDebug::DrawPolygon(const b2Vec2* vertices, int32 vertexCount, const b2Color& color)
+{
+    sf::ConvexShape polygon(vertexCount);
+	for(int32 i = 0; i < vertexCount; ++i)
+	{
+        polygon.setPoint(i, sf::Vector2f(vertices[i].x*PIXELS_METER, vertices[i].y*PIXELS_METER));
+		polygon.setOutlineColor(sf::Color(255*color.r, 255*color.g, 255*color.b));
+		polygon.setOutlineThickness(1);
+	}
+
+	m_target->draw(polygon);
+}
+
+void b2DrawDebug::DrawSolidPolygon(const b2Vec2* vertices, int32 vertexCount, const b2Color& color)
+{
+    sf::ConvexShape polygon(vertexCount);
+	for(int32 i = 0; i < vertexCount; ++i)
+	{
+        polygon.setPoint(i, sf::Vector2f(vertices[i].x*PIXELS_METER, vertices[i].y*PIXELS_METER));
+		polygon.setFillColor(sf::Color(200*color.r, 200*color.g, 200*color.b));
+		polygon.setOutlineColor(sf::Color(255*color.r*100, 255*color.g, 255*color.b));
+		polygon.setOutlineThickness(1);
+	}
+
+	m_target->draw(polygon);
+}
+
+void b2DrawDebug::DrawCircle(const b2Vec2& center, float32 radius, const b2Color& color)
+{
+	sf::CircleShape circle((radius*PIXELS_METER));
+        circle.setPosition((center.x-radius)*PIXELS_METER, (center.y-radius)*PIXELS_METER);
+        circle.setOutlineColor(sf::Color(255*color.r, 255*color.g, 255*color.b));
+        circle.setOutlineThickness(1);
+
+	m_target->draw(circle);
+}
+
+void b2DrawDebug::DrawSolidCircle(const b2Vec2& center, float32 radius, const b2Vec2& axis, const b2Color& color)
+{
+	sf::CircleShape circle((radius*PIXELS_METER));
+        circle.setPosition((center.x-radius)*PIXELS_METER, (center.y-radius)*PIXELS_METER);
+        circle.setFillColor(sf::Color(200*color.r, 200*color.g, 200*color.b));
+        circle.setOutlineColor(sf::Color(255*color.r, 255*color.g, 255*color.b));
+        circle.setOutlineThickness(1);
+    sf::VertexArray axe(sf::Lines, 2);
+        axe[0].position = circle.getPosition();
+        axe[0].color = sf::Color::Black;
+        axe[1].position = sf::Vector2f(axis.x*PIXELS_METER, axis.y*PIXELS_METER);
+        axe[1].color = sf::Color::Black;
+	m_target->draw(circle);
+	m_target->draw(axe);
+}
+
+void b2DrawDebug::DrawTransform(const b2Transform&)
+{
+
+}
+
+void b2DrawDebug::DrawSegment(const b2Vec2& p1, const b2Vec2& p2, const b2Color& color)
+{
+    sf::VertexArray line(sf::Lines, 2);
+    line[0].position = sf::Vector2f(p1.x*PIXELS_METER, p1.y*PIXELS_METER);
+    line[0].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+    line[1].position = sf::Vector2f(p2.x*PIXELS_METER, p2.y*PIXELS_METER);
+    line[1].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+
+	m_target->draw(line);
+}
+
+void b2DrawDebug::DrawPoint(const b2Vec2& p, float32 size, const b2Color& color)
+{
+	sf::CircleShape circle((size*PIXELS_METER)*2);
+        circle.setPosition((p.x-size)*PIXELS_METER, (p.y-size)*PIXELS_METER);
+        circle.setOutlineColor(sf::Color(255*color.r, 255*color.g, 255*color.b));
+        circle.setOutlineThickness(1);
+
+	m_target->draw(circle);
+}
+
+void b2DrawDebug::DrawAABB(b2AABB* aabb, const b2Color& color)
+{
+    float top = aabb->upperBound.y;
+    float left = aabb->upperBound.x;
+    float width = aabb->lowerBound.x-aabb->upperBound.x;
+    float height = aabb->lowerBound.y-aabb->upperBound.y;
+    sf::VertexArray lines(sf::LinesStrip, 5);
+    lines[0].position = sf::Vector2f(top*PIXELS_METER, left*PIXELS_METER);
+    lines[0].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+    lines[1].position = sf::Vector2f((top+width)*PIXELS_METER, left*PIXELS_METER);
+    lines[1].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+    lines[2].position = sf::Vector2f((top+width)*PIXELS_METER, (left+height)*PIXELS_METER);
+    lines[2].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+    lines[3].position = sf::Vector2f((top)*PIXELS_METER, (left+height)*PIXELS_METER);
+    lines[3].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+    lines[4].position = sf::Vector2f(top*PIXELS_METER, left*PIXELS_METER);
+    lines[4].color = sf::Color(255*color.r, 255*color.g, 255*color.b);
+
+	m_target->draw(lines);
+}

@@ -1,0 +1,397 @@
+#include "Pong.hpp"
+
+Pong::Pong() :
+    sf::RenderWindow(sf::VideoMode(900, 500), "Pong", sf::Style::Close, sf::ContextSettings(0, 0, 16, 2, 0)),
+    m_gameState(GameState::PressSpaceToStart), m_chrono(), velocityXlimit(0.0f),
+    g_txtPressSpaceToStart("Press [SPACE] to start...", g_fontPixelArt), g_txtPressEnterToContinue("Press [ENTER] to continue...", g_fontPixelArt),
+    g_paddle1(sf::Vector2f(36, 185)), g_paddle2(g_paddle1.getSize()), g_ball(18, 360), g_topWall(sf::Vector2f(900, 20)), g_bottomWall(g_topWall.getSize()),
+    p_timeStep(1.0f/60.0f), p_b2DebugDraw(this), p_b2World(new b2World(b2Vec2(0.0f, 0.0f))),
+    p_b2Body_topWall(nullptr), p_b2Body_bottomWall(nullptr), p_b2Body_paddle1(nullptr), p_b2Body_paddle2(nullptr), p_b2Body_ball(nullptr),
+    p_b2Fixture_topWall(nullptr), p_b2Fixture_bottomWall(nullptr), p_b2Fixture_paddle1(nullptr), p_b2Fixture_paddle2(nullptr), p_b2Fixture_ball(nullptr),
+    p_b2Joint_paddle1(nullptr), p_b2Joint_paddle2(nullptr)
+{
+    // Graphics
+    sf::RenderWindow::setFramerateLimit(60);
+    g_fontPixelArt.loadFromFile("pixelart.ttf");
+    g_txtPressSpaceToStart.setColor(sf::Color::White);
+    g_txtPressSpaceToStart.setCharacterSize(21);
+    g_txtPressSpaceToStart.setPosition(sf::RenderWindow::getSize().x/2-g_txtPressSpaceToStart.getGlobalBounds().width/2,
+                                        (sf::RenderWindow::getSize().y-sf::RenderWindow::getSize().y/4)-g_txtPressSpaceToStart.getGlobalBounds().height/2);
+    g_txtPressEnterToContinue.setColor(sf::Color::White);
+    g_txtPressEnterToContinue.setCharacterSize(21);
+    g_txtPressEnterToContinue.setPosition(sf::RenderWindow::getSize().x/2-g_txtPressEnterToContinue.getGlobalBounds().width/2,
+                                            (sf::RenderWindow::getSize().y-sf::RenderWindow::getSize().y/4)-g_txtPressEnterToContinue.getGlobalBounds().height/2);
+    g_topWall.setPosition(0, 0);
+    g_bottomWall.setPosition(0, sf::RenderWindow::getSize().y-g_bottomWall.getSize().y);
+
+    // Box2D
+    p_b2World->SetDebugDraw(&p_b2DebugDraw);
+    pInitShapes();
+    pCreateBackground();
+    pCreatePaddle1();
+    pCreatePaddle2();
+    pCreateBall();
+}
+
+Pong::~Pong()
+{
+    delete p_b2World;
+}
+
+
+
+
+///===================================================================================================
+/// Pong::update()
+void Pong::update()
+{
+    // Events
+    sf::Event event;
+    while(sf::RenderWindow::pollEvent(event))
+    {
+        if(event.type == sf::Event::Closed)
+            sf::RenderWindow::close();
+    }
+
+    switch(m_gameState)
+    {
+        /////////////////////////////////////////////////
+        // GameState::PressSpaceToStart
+        case GameState::PressSpaceToStart:
+            if(sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+            {
+                pReset();
+                switch(rand()%4)
+                {
+                    case 0: p_b2Body_ball->SetLinearVelocity(b2Vec2(-15.0f, -8.0f)); break;
+                    case 1: p_b2Body_ball->SetLinearVelocity(b2Vec2(-15.0f, 8.0f)); break;
+                    case 2: p_b2Body_ball->SetLinearVelocity(b2Vec2(15.0f, -8.0f)); break;
+                    case 3: p_b2Body_ball->SetLinearVelocity(b2Vec2(15.0f, 8.0f)); break;
+                }
+
+                m_chrono.restart();
+                m_gameState = GameState::PartyInProgress;
+            }
+        break;
+
+        /////////////////////////////////////////////////
+        // GameState::PartyInProgress
+        case GameState::PartyInProgress:
+            // Paddle 1 (ZQSD)
+            if(sf::Keyboard::isKeyPressed(sf::Keyboard::Z))
+                p_b2Body_paddle1->SetLinearVelocity(b2Vec2(0.0f, -20.0f));
+            else if(sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+                p_b2Body_paddle1->SetLinearVelocity(b2Vec2(0.0f, 20.0f));
+            else
+                p_b2Body_paddle1->SetLinearVelocity(b2Vec2(0.0f, 0.0f));
+
+            // Paddle 2 (ARROWS)
+            if(sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
+                p_b2Body_paddle2->SetLinearVelocity(b2Vec2(0.0f, -20.0f));
+            else if(sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
+                p_b2Body_paddle2->SetLinearVelocity(b2Vec2(0.0f, 20.0f));
+            else
+                p_b2Body_paddle2->SetLinearVelocity(b2Vec2(0.0f, 0.0f));
+
+            //aiPaddle1();
+            aiPaddle2();
+            ballVelocityControl();
+
+            p_b2World->Step(p_timeStep, 10, 8);
+            p_b2World->ClearForces();
+        break;
+
+        case GameState::Paddle1Win: case GameState::Paddle2Win:
+            if(m_gameState == GameState::Paddle1Win)
+                g_txtWinner.setString("Paddle 1 Win");
+            else
+                g_txtWinner.setString("Paddle 2 Win");
+
+            g_txtWinner.setFont(g_fontPixelArt);
+            g_txtWinner.setColor(sf::Color::White);
+            g_txtWinner.setCharacterSize(60);
+            g_txtWinner.setPosition(sf::RenderWindow::getSize().x/2-g_txtWinner.getGlobalBounds().width/2,
+                                    sf::RenderWindow::getSize().y/2-g_txtWinner.getGlobalBounds().height/2);
+            if(sf::Keyboard::isKeyPressed(sf::Keyboard::Return))
+            {
+                pReset();
+                m_gameState = GameState::PressSpaceToStart;
+            }
+        break;
+    }
+
+    if(sf::Keyboard::isKeyPressed(sf::Keyboard::P))
+        pReset();
+}
+
+
+
+
+///===================================================================================================
+/// Pong::display()
+void Pong::display()
+{
+    g_paddle1.setPosition(p_b2Body_paddle1->GetPosition().x*PPM-g_paddle1.getSize().x/2,
+                            p_b2Body_paddle1->GetPosition().y*PPM-g_paddle1.getSize().y/2);
+    g_paddle2.setPosition(p_b2Body_paddle2->GetPosition().x*PPM-g_paddle2.getSize().x/2,
+                            p_b2Body_paddle2->GetPosition().y*PPM-g_paddle2.getSize().y/2);
+    g_ball.setPosition(p_b2Body_ball->GetPosition().x*PPM-g_ball.getRadius(),
+                       p_b2Body_ball->GetPosition().y*PPM-g_ball.getRadius());
+
+    sf::RenderWindow::clear(sf::Color::Black);
+    switch(m_gameState)
+    {
+        case GameState::PressSpaceToStart: case GameState::PartyInProgress:
+            if(m_gameState == GameState::PressSpaceToStart)
+                sf::RenderWindow::draw(g_txtPressSpaceToStart);
+            sf::RenderWindow::draw(g_paddle1);
+            sf::RenderWindow::draw(g_paddle2);
+            sf::RenderWindow::draw(g_topWall);
+            sf::RenderWindow::draw(g_bottomWall);
+            sf::RenderWindow::draw(g_ball);
+
+            //p_b2World->DrawDebugData();
+        break;
+
+        case GameState::Paddle1Win: case GameState::Paddle2Win:
+            sf::RenderWindow::draw(g_txtWinner);
+            sf::RenderWindow::draw(g_txtPressEnterToContinue);
+        break;
+    }
+    sf::RenderWindow::display();
+}
+
+
+
+
+///===================================================================================================
+/// Pong::aiPaddle1()
+void Pong::aiPaddle1()
+{
+    float ballY = p_b2Body_ball->GetPosition().y*PPM;
+    float paddle1Y = p_b2Body_paddle1->GetPosition().y*PPM;
+    float dt = ballY-paddle1Y;
+
+    if(dt > 0.0f)
+        p_b2Body_paddle1->SetLinearVelocity(b2Vec2(0.0f, 20.0f));
+    else if(dt < 0.0f)
+        p_b2Body_paddle1->SetLinearVelocity(b2Vec2(0.0f, -20.0f));
+}
+
+
+
+
+///===================================================================================================
+/// Pong::aiPaddle2()
+void Pong::aiPaddle2()
+{
+    float ballY = p_b2Body_ball->GetPosition().y*PPM;
+    float paddle2Y = p_b2Body_paddle2->GetPosition().y*PPM;
+    float dt = ballY-paddle2Y;
+
+    if(dt > 0.0f)
+        p_b2Body_paddle2->SetLinearVelocity(b2Vec2(0.0f, 20.0f));
+    else if(dt < 0.0f)
+        p_b2Body_paddle2->SetLinearVelocity(b2Vec2(0.0f, -20.0f));
+}
+
+
+
+
+///===================================================================================================
+/// Pong::ballVelocityControl()
+void Pong::ballVelocityControl()
+{
+    float absVelocityX = std::abs(p_b2Body_ball->GetLinearVelocity().x);
+    float absVelocityY = std::abs(p_b2Body_ball->GetLinearVelocity().y);
+    velocityXlimit = 2*(m_chrono.getElapsedTime().asSeconds()/10);
+
+    // Limite de la vélocité X
+    if(absVelocityX > 30.0f+velocityXlimit)
+    {
+        if(p_b2Body_ball->GetLinearVelocity().x > 0)
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(40.0f+velocityXlimit, p_b2Body_ball->GetLinearVelocity().y));
+        else
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(-40.0f-velocityXlimit, p_b2Body_ball->GetLinearVelocity().y));
+    }
+    else if(absVelocityX < 15.0f+velocityXlimit)
+    {
+        if(p_b2Body_ball->GetLinearVelocity().x > 0)
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(15.0f+velocityXlimit, p_b2Body_ball->GetLinearVelocity().y));
+        else
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(-15.0f-velocityXlimit, p_b2Body_ball->GetLinearVelocity().y));
+    }
+
+    // Limite de la vélocité Y
+    if(absVelocityY > 15.0f)
+    {
+        if(p_b2Body_ball->GetLinearVelocity().y > 0.0f)
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(p_b2Body_ball->GetLinearVelocity().x, 15.0f));
+        else
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(p_b2Body_ball->GetLinearVelocity().x, -15.0f));
+    }
+    else if(absVelocityY < 10.0f)
+    {
+        if(p_b2Body_ball->GetLinearVelocity().y > 0.0f)
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(p_b2Body_ball->GetLinearVelocity().x, 8.0f));
+        else
+            p_b2Body_ball->SetLinearVelocity(b2Vec2(p_b2Body_ball->GetLinearVelocity().x, -8.0f));
+    }
+
+    if(p_b2Body_ball->GetPosition().x < p_b2Body_paddle1->GetPosition().x-(g_paddle1.getSize().x/2)/PPM)
+        m_gameState = GameState::Paddle2Win;
+
+    if(p_b2Body_ball->GetPosition().x > p_b2Body_paddle2->GetPosition().x+(g_paddle2.getSize().x/2)/PPM)
+        m_gameState = GameState::Paddle1Win;
+}
+
+
+
+
+///===================================================================================================
+/// Pong::pInitShapes()
+void Pong::pInitShapes()
+{
+    // Shapes
+    p_b2PolygonShape_wall.SetAsBox(g_topWall.getSize().x/2/PPM, g_topWall.getSize().y/2/PPM);
+    p_b2PolygonShape_paddle.SetAsBox(g_paddle1.getSize().x/2/PPM, g_paddle1.getSize().y/2/PPM);
+    p_b2CircleShape_ball.m_radius = g_ball.getRadius()/PPM;
+}
+
+
+
+
+///===================================================================================================
+/// Pong::pCreateBackground()
+void Pong::pCreateBackground()
+{
+    // BodyDef
+    p_b2BodyDef_topWall.position.Set((g_topWall.getPosition().x+g_topWall.getSize().x/2)/PPM, (g_topWall.getPosition().y+g_topWall.getSize().y/2)/PPM);
+    p_b2BodyDef_bottomWall.position.Set((g_bottomWall.getPosition().x+g_bottomWall.getSize().x/2)/PPM, (g_bottomWall.getPosition().y+g_bottomWall.getSize().y/2)/PPM);
+
+    // Body
+    p_b2Body_topWall = p_b2World->CreateBody(&p_b2BodyDef_topWall);
+    p_b2Body_bottomWall = p_b2World->CreateBody(&p_b2BodyDef_bottomWall);
+
+    // Fixture
+    p_b2Fixture_topWall = p_b2Body_topWall->CreateFixture(&p_b2PolygonShape_wall, 0.0f);
+        p_b2Fixture_topWall->SetRestitution(0.0f);
+    p_b2Fixture_bottomWall = p_b2Body_bottomWall->CreateFixture(&p_b2PolygonShape_wall, 0.0f);
+        p_b2Fixture_bottomWall->SetRestitution(0.0f);
+}
+
+
+
+
+///===================================================================================================
+/// Pong::pCreatePaddle1()
+void Pong::pCreatePaddle1()
+{
+    // BodyDef
+    p_b2BodyDef_paddle1.position.Set((g_paddle1.getSize().x/2)/PPM+36/PPM,
+                                     (sf::RenderWindow::getSize().y/2)/PPM+(g_paddle1.getSize().x/2)/PPM);
+        p_b2BodyDef_paddle1.type = b2_dynamicBody;
+        p_b2BodyDef_paddle1.allowSleep = false;
+        p_b2BodyDef_paddle1.fixedRotation = true;
+
+    // Body
+    p_b2Body_paddle1 = p_b2World->CreateBody(&p_b2BodyDef_paddle1);
+
+    // Fixture
+    p_b2Fixture_paddle1 = p_b2Body_paddle1->CreateFixture(&p_b2PolygonShape_paddle, 10.0f);
+        p_b2Fixture_paddle1->SetRestitution(0.0f);
+
+    // JointDef
+    p_b2JointDef_paddle1.Initialize(p_b2Body_paddle1, p_b2Body_topWall, p_b2Body_paddle1->GetWorldCenter(), b2Vec2(0.0f, 1.0f));
+        p_b2JointDef_paddle1.collideConnected = true;
+
+    // Joint
+    p_b2Joint_paddle1 = p_b2World->CreateJoint(&p_b2JointDef_paddle1);
+}
+
+
+
+
+///===================================================================================================
+/// Pong::pCreatePaddle2()
+void Pong::pCreatePaddle2()
+{
+    // BodyDef
+    p_b2BodyDef_paddle2.position.Set((sf::RenderWindow::getSize().x-g_paddle2.getSize().x/2)/PPM-36/PPM,
+                                   (sf::RenderWindow::getSize().y/2)/PPM+(g_paddle2.getSize().x/2)/PPM);
+        p_b2BodyDef_paddle2.type = b2_dynamicBody;
+        p_b2BodyDef_paddle2.allowSleep = false;
+        p_b2BodyDef_paddle2.fixedRotation = true;
+
+    // Body
+    p_b2Body_paddle2 = p_b2World->CreateBody(&p_b2BodyDef_paddle2);
+
+    // Fixture
+    p_b2Fixture_paddle2 = p_b2Body_paddle2->CreateFixture(&p_b2PolygonShape_paddle, 10.0f);
+        p_b2Fixture_paddle2->SetRestitution(0.0f);
+
+    // JointDef
+    p_b2JointDef_paddle2.Initialize(p_b2Body_paddle2, p_b2Body_topWall, p_b2Body_paddle2->GetWorldCenter(), b2Vec2(0.0f, 1.0f));
+        p_b2JointDef_paddle2.collideConnected = true;
+
+    // Joint
+    p_b2Joint_paddle2 = p_b2World->CreateJoint(&p_b2JointDef_paddle2);
+}
+
+
+
+
+///===================================================================================================
+/// Pong::pCreateBall()
+void Pong::pCreateBall()
+{
+    // BodyDef1
+    p_b2BodyDef_ball.position.Set((sf::RenderWindow::getSize().x/2)/PPM,
+                               (sf::RenderWindow::getSize().y/2)/PPM);
+        p_b2BodyDef_ball.type = b2_dynamicBody;
+        p_b2BodyDef_ball.allowSleep = false;
+        p_b2BodyDef_ball.fixedRotation = false;
+        p_b2BodyDef_ball.bullet = true;
+        p_b2BodyDef_ball.angle = 30;
+
+    // Body
+    p_b2Body_ball = p_b2World->CreateBody(&p_b2BodyDef_ball);
+
+    // Fixture
+    p_b2Fixture_ball = p_b2Body_ball->CreateFixture(&p_b2CircleShape_ball, 1.0f);
+        p_b2Fixture_ball->SetRestitution(1.02f);
+}
+
+
+
+
+///===================================================================================================
+/// Pong::pReset()
+void Pong::pReset()
+{
+    if(p_b2Joint_paddle1 != nullptr)
+        p_b2World->DestroyJoint(p_b2Joint_paddle1);
+
+    if(p_b2Joint_paddle2 != nullptr)
+        p_b2World->DestroyJoint(p_b2Joint_paddle2);
+
+    if(p_b2Body_topWall != nullptr)
+        p_b2World->DestroyBody(p_b2Body_topWall);
+
+    if(p_b2Body_bottomWall != nullptr)
+        p_b2World->DestroyBody(p_b2Body_bottomWall);
+
+    if(p_b2Body_paddle1 != nullptr)
+        p_b2World->DestroyBody(p_b2Body_paddle1);
+
+    if(p_b2Body_paddle2 != nullptr)
+        p_b2World->DestroyBody(p_b2Body_paddle2);
+
+    if(p_b2Body_ball != nullptr)
+        p_b2World->DestroyBody(p_b2Body_ball);
+
+    pCreateBackground();
+    pCreatePaddle1();
+    pCreatePaddle2();
+    pCreateBall();
+}
